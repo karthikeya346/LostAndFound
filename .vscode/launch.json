@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "AdminChatViewerFrame",
+            "request": "launch",
+            "mainClass": "com.lostfound.ui.AdminChatViewerFrame",
+            "projectName": "lost_and_found"
+        },
+        {
+            "type": "java",
+            "name": "MainApp",
+            "request": "launch",
+            "mainClass": "com.lostfound.MainApp",
+            "projectName": "lost_and_found"
+        },
+        {
+            "type": "java",
+            "name": "Current File",
+            "request": "launch",
+            "mainClass": "${file}"
+        },
+        {
+            "type": "java",
+            "name": "LoginFrame",
+            "request": "launch",
+            "mainClass": "com.lostfound.ui.LoginFrame",
+            "projectName": "lost_and_found"
+        }
+    ]
+}
