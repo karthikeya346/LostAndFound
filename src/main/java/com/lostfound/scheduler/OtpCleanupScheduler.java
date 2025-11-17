@@ -1,6 +1,6 @@
 package com.lostfound.scheduler;
 
-import com.lostfound.controller.NotificationController;
+import com.lostfound.dao.NotificationDAO;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -9,7 +9,7 @@ import java.util.TimerTask;
  */
 public class OtpCleanupScheduler {
 
-    private final NotificationController notificationController = new NotificationController();
+    private final NotificationDAO notificationDAO = new NotificationDAO();
     private final Timer timer = new Timer(true); // daemon thread
 
     /** Start the scheduler. */
@@ -18,9 +18,13 @@ public class OtpCleanupScheduler {
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                int cleared = notificationController.clearExpiredOtps();
-                if (cleared > 0) {
-                    System.out.println("[Scheduler] Cleared " + cleared + " expired OTP notifications.");
+                try {
+                    int cleared = notificationDAO.clearExpiredOtps();
+                    if (cleared > 0) {
+                        System.out.println("[Scheduler] Cleared " + cleared + " expired OTP notifications.");
+                    }
+                } catch (Exception e) {
+                    System.err.println("[Scheduler] Error clearing expired OTPs: " + e.getMessage());
                 }
             }
         }, 0, 5 * 60 * 1000);

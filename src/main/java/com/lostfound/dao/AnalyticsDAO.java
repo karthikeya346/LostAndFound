@@ -1,11 +1,17 @@
 package com.lostfound.dao;
 
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.util.*;
 
+@Component
 public class AnalyticsDAO {
+
+    private static final Logger logger = LoggerFactory.getLogger(AnalyticsDAO.class);
 
     // 📊 Claims grouped by status (Pending, Approved, Rejected, Returned)
     public Map<String, Integer> getClaimStatsByStatus() {
@@ -18,7 +24,7 @@ public class AnalyticsDAO {
                 stats.put(rs.getString("status"), rs.getInt("total"));
             }
         } catch (Exception e) {
-            e.printStackTrace(); // TODO: replace with proper logging
+            logger.error("Error fetching claim stats by status", e);
         }
         return stats;
     }
@@ -35,7 +41,7 @@ public class AnalyticsDAO {
                 stats.put(rs.getString("month"), rs.getInt("total"));
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error fetching items reported by month", e);
         }
         return stats;
     }

@@ -2,80 +2,127 @@ package com.lostfound.controller;
 
 import com.lostfound.dao.UserDAO;
 import model.User;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import java.sql.Timestamp;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+@RestController
+@RequestMapping("/api/users")
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"})
 public class UserController {
 
-    private final UserDAO userDAO = new UserDAO();
+    @Autowired
+    private UserDAO userDAO;
 
-    /** Register a new user. */
-    public boolean registerUser(User user) {
-        return userDAO.createUser(user);
-    }
-
-    /** Login: fetch user by username and verify password hash externally. */
-    public User loginUser(String username) {
-        User user = userDAO.getByUsername(username);
-        if (user != null) {
-            userDAO.logLogin(user.getId());
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getAllUsers() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            List<User> users = userDAO.getAllUsers();
+            response.put("success", true);
+            response.put("users", users);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
         }
-        return user;
     }
 
-    /** Logout a user. */
-    public void logoutUser(int userId) {
-        userDAO.logout(userId);
+    @GetMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> getUserById(@PathVariable int id) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            User user = userDAO.getById(id);
+            if (user != null) {
+                response.put("success", true);
+                response.put("user", user);
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "User not found");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Fetch user by ID. */
-    public User getUserById(int id) {
-        return userDAO.getById(id);
+    @PostMapping("/{id}/ban")
+    public ResponseEntity<Map<String, Object>> banUser(@PathVariable int id, @RequestParam int adminId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = userDAO.banUser(id, adminId);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "User banned successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to ban user");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Check if username exists. */
-    public boolean usernameExists(String username) {
-        return userDAO.existsByUsername(username);
+    @PostMapping("/{id}/unban")
+    public ResponseEntity<Map<String, Object>> unbanUser(@PathVariable int id, @RequestParam int adminId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = userDAO.unbanUser(id, adminId);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "User unbanned successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to unban user");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Check if email exists. */
-    public boolean emailExists(String email) {
-        return userDAO.existsByEmail(email);
+    @GetMapping("/check-username")
+    public ResponseEntity<Map<String, Object>> checkUsername(@RequestParam String username) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean exists = userDAO.existsByUsername(username);
+            response.put("success", true);
+            response.put("exists", exists);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Create password reset token. */
-    public boolean createPasswordResetToken(String email, String token, Timestamp expiry) {
-        return userDAO.createPasswordResetToken(email, token, expiry);
-    }
-
-    /** Validate reset token. */
-    public boolean validateResetToken(String token) {
-        return userDAO.validateResetToken(token);
-    }
-
-    /** Update password using reset token. */
-    public boolean updatePassword(String token, String newPasswordHash) {
-        return userDAO.updatePassword(token, newPasswordHash);
-    }
-
-    /** Check if user is admin. */
-    public boolean isAdmin(int userId) {
-        return userDAO.isAdmin(userId);
-    }
-
-    /** Ban a user (admin action). */
-    public boolean banUser(int userId, int adminId) {
-        return userDAO.banUser(userId, adminId);
-    }
-
-    /** Unban a user (admin action). */
-    public boolean unbanUser(int userId, int adminId) {
-        return userDAO.unbanUser(userId, adminId);
-    }
-
-    /** Fetch all users (admin view). */
-    public List<User> getAllUsers() {
-        return userDAO.getAllUsers();
+    @GetMapping("/check-email")
+    public ResponseEntity<Map<String, Object>> checkEmail(@RequestParam String email) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean exists = userDAO.existsByEmail(email);
+            response.put("success", true);
+            response.put("exists", exists);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 }

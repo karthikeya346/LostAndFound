@@ -2,6 +2,7 @@ package com.lostfound.dao;
 
 import model.AuditLog;
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -11,6 +12,7 @@ import java.util.List;
  * DAO for audit_logs table.
  * Handles inserting new logs and fetching logs for dashboard/traceability.
  */
+@Component
 public class AuditLogDAO {
 
     // ---------------- Insert Logs ----------------
@@ -24,7 +26,12 @@ public class AuditLogDAO {
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, userId);
+            if (userId <= 0) {
+                ps.setNull(1, Types.INTEGER);
+            } else {
+                ps.setInt(1, userId);
+            }
+
             ps.setString(2, action);
 
             if (itemId != null) ps.setInt(3, itemId);
@@ -102,6 +109,29 @@ public class AuditLogDAO {
             System.err.println("[AuditLogDAO] Error fetching logs by action: " + e.getMessage());
         }
         return logs;
+    }
+
+    public int clearAll() {
+        String sql = "DELETE FROM audit_logs";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            System.err.println("[AuditLogDAO] Error clearing audit logs: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    public boolean deleteById(int id) {
+        String sql = "DELETE FROM audit_logs WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            return ps.executeUpdate() == 1;
+        } catch (Exception e) {
+            System.err.println("[AuditLogDAO] Error deleting audit log id=" + id + ": " + e.getMessage());
+            return false;
+        }
     }
 
     // ---------------- Helpers ----------------

@@ -2,84 +2,180 @@ package com.lostfound.controller;
 
 import com.lostfound.dao.ClaimDAO;
 import com.lostfound.dao.ItemDAO;
-import model.Claim;
+import com.lostfound.dao.NotificationDAO;
 import model.Item;
+import model.Claim;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+@RestController
+@RequestMapping("/api/claims")
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"})
 public class ClaimController {
 
-    private final ClaimDAO claimDAO = new ClaimDAO();
-    private final ItemDAO itemDAO = new ItemDAO();
+    @Autowired
+    private ClaimDAO claimDAO;
+    @Autowired
+    private NotificationDAO notificationDAO;
+    @Autowired
+    private ItemDAO itemDAO;
 
-    /** Create a new claim (user-initiated). */
-    public boolean createClaim(Claim claim) {
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> createClaim(@RequestBody Map<String, Object> request) {
+        Map<String, Object> response = new HashMap<>();
         try {
-            return claimDAO.createClaim(claim);
+            Claim claim = new Claim(
+                (Integer) request.get("itemId"),
+                (Integer) request.get("userId")
+            );
+            // Rule: reporter of a FOUND item cannot claim their own item
+            Item item = itemDAO.getItemById(claim.getItemId());
+            if (item == null) {
+                response.put("success", false);
+                response.put("message", "Item not found");
+                return ResponseEntity.badRequest().body(response);
+            }
+            if (item.getUserId() == claim.getUserId() && "FOUND".equalsIgnoreCase(item.getType())) {
+                response.put("success", false);
+                response.put("message", "You cannot claim an item you reported as FOUND");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            boolean success = claimDAO.createClaim(claim);
+            if (success) {
+                try { notificationDAO.saveNotification(item.getUserId(), "CLAIM_CREATED", "Your item '" + item.getTitle() + "' has a new claim"); } catch (Exception ignored) {}
+                response.put("success", true);
+                response.put("message", "Claim created successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to create claim");
+                return ResponseEntity.badRequest().body(response);
+            }
         } catch (Exception e) {
-            e.printStackTrace(); // would print red text in console
-            return false;
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
         }
     }
 
-    /** Create a new claim and immediately fetch suggested matches. */
-    public List<Item> createClaimWithSuggestions(Claim claim) {
-        boolean saved = claimDAO.createClaim(claim);
-        if (!saved) {
-            return Collections.emptyList();
+    @GetMapping("/pending")
+    public ResponseEntity<Map<String, Object>> getPendingClaims() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            List<Claim> claims = claimDAO.getPendingClaims();
+            response.put("success", true);
+            response.put("claims", claims);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
         }
-        return itemDAO.findPotentialMatches(claim);
     }
 
-    /** Link a claim to a matched item (user confirms suggestion). */
-    public boolean linkClaimToItem(int claimId, int itemId, int userId) {
-        return claimDAO.linkClaimToItem(claimId, itemId, userId);
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<Map<String, Object>> getClaimsByUser(@PathVariable int userId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            List<Claim> claims = claimDAO.getClaimsByUser(userId);
+            response.put("success", true);
+            response.put("claims", claims != null ? claims : Collections.emptyList());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Unlink a claim from an item (reset to pending). */
-    public boolean unlinkClaim(int claimId, int userId) {
-        return claimDAO.unlinkClaim(claimId, userId);
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<Map<String, Object>> approveClaim(@PathVariable int id, @RequestParam int adminId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = claimDAO.approveClaim(id, adminId);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "Claim approved successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to approve claim");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Fetch all pending claims (for admin dashboard). */
-    public List<Claim> getPendingClaims() {
-        return claimDAO.getPendingClaims();
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<Map<String, Object>> rejectClaim(@PathVariable int id, @RequestParam int adminId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = claimDAO.rejectClaim(id, adminId);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "Claim rejected successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to reject claim");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Fetch all claims submitted by a specific user. */
-    public List<Claim> getClaimsByUser(int userId) {
-        List<Claim> claims = claimDAO.getClaimsByUser(userId);
-        return claims != null ? claims : Collections.emptyList();
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> cancelClaim(@PathVariable int id, @RequestParam int userId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = claimDAO.cancelClaim(id, userId);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "Claim cancelled successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to cancel claim");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Cancel a claim (user action). */
-    public boolean cancelClaim(int claimId, int userId) {
-        return claimDAO.cancelClaim(claimId, userId);
-    }
-
-    /** Approve a claim (admin action). */
-    public boolean approveClaim(int claimId, int adminId) {
-        return claimDAO.approveClaim(claimId, adminId);
-    }
-
-    /** Reject a claim (admin action). */
-    public boolean rejectClaim(int claimId, int adminId) {
-        return claimDAO.rejectClaim(claimId, adminId);
-    }
-
-    /** Mark a claim as returned (admin action). */
-    public boolean markReturned(int claimId, int adminId) {
-        return claimDAO.markReturned(claimId, adminId);
-    }
-
-    /** Fetch chatId for a claim (for user dashboard chat button). */
-    public int getChatIdForClaim(int claimId) {
-        return claimDAO.getChatIdForClaim(claimId);
-    }
-
-    /** Fetch ownerId for an item (optional helper). */
-    public int getOwnerIdForItem(int itemId) {
-        return claimDAO.getOwnerIdForItem(itemId);
+    @PostMapping("/{id}/mark-returned")
+    public ResponseEntity<Map<String, Object>> markReturned(@PathVariable int id) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean ok = claimDAO.markReturned(id);
+            if (ok) {
+                response.put("success", true);
+                response.put("message", "Claim marked as RETURNED");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to update claim status");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 }

@@ -1,0 +1,16 @@
+# Java build output
+target/
+
+# Node.js frontend build output
+frontend/build/
+node_modules/
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env

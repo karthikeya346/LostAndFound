@@ -2,17 +2,20 @@ package com.lostfound.dao;
 
 import model.Claim;
 import com.lostfound.util.DBConnection;
-import com.lostfound.controller.ChatController;
+import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Data Access Object (DAO) for claims
+ */
+@Component
 public class ClaimDAO {
 
     private final AuditLogDAO auditLogDAO = new AuditLogDAO();
     private final NotificationDAO notificationDAO = new NotificationDAO();
-    private final ChatController chatController = new ChatController();
 
     // Create a new claim (user-initiated)
     public boolean createClaim(Claim claim) {
@@ -20,7 +23,7 @@ public class ClaimDAO {
         try (Connection conn = DBConnection.getConnection()) {
 
             // ✅ Prevent self-claim: user cannot claim their own reported item
-            String checkSql = "SELECT COUNT(*) FROM items WHERE id=? AND reported_by=?";
+            String checkSql = "SELECT COUNT(*) FROM items WHERE id=? AND user_id=?";
             try (PreparedStatement checkPs = conn.prepareStatement(checkSql)) {
                 checkPs.setInt(1, claim.getItemId());
                 checkPs.setInt(2, claim.getUserId());
@@ -175,17 +178,20 @@ public class ClaimDAO {
                     ps.executeUpdate();
                 }
 
-                // ✅ Create chat session
-                int chatId = chatController.createChatSession(itemId, claimId, adminId);
-
-                if (chatId > 0) {
-                    chatController.addParticipant(chatId, ownerId, "Owner", "OWNER");
-                    chatController.addParticipant(chatId, claimantId, "Claimant", "CLAIMANT");
-
-                    notificationDAO.saveNotification(ownerId, "CHAT",
-                            "A chat has been opened for claim #" + claimId + ".");
-                    notificationDAO.saveNotification(claimantId, "CHAT",
-                            "A chat has been opened for your claim #" + claimId + ".");
+                // ✅ Create anonymous chat session between owner and claimant
+                try {
+                    ChatDAO chatDAO = new ChatDAO();
+                    int chatId = chatDAO.createChatSession(itemId, claimId, adminId);
+                    if (chatId > 0) {
+                        chatDAO.addParticipant(chatId, ownerId, "User A", "OWNER");
+                        chatDAO.addParticipant(chatId, claimantId, "User B", "CLAIMANT");
+                        notificationDAO.saveNotification(ownerId, "CHAT",
+                                "A private chat has been opened for claim #" + claimId + ".");
+                        notificationDAO.saveNotification(claimantId, "CHAT",
+                                "A private chat has been opened for your claim #" + claimId + ".");
+                    }
+                } catch (Exception chatEx) {
+                    System.err.println("Error creating chat session: " + chatEx.getMessage());
                 }
             } catch (Exception e) {
                 System.err.println("Error creating chat session for claim: " + e.getMessage());
@@ -202,9 +208,19 @@ public class ClaimDAO {
     }
 
     public boolean markReturned(int claimId, int adminId) {
-        return updateClaimStatus(claimId, "RETURNED", adminId,
+        boolean ok = updateClaimStatus(claimId, "RETURNED", adminId,
                 "Admin marked claim as returned",
                 "Your claimed item has been marked as returned.", true);
+        if (ok) {
+            // Also mark related item as RETURNED
+            try (Connection conn = DBConnection.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                         "UPDATE items SET status='RETURNED' WHERE id=(SELECT item_id FROM claims WHERE id=?)")) {
+                ps.setInt(1, claimId);
+                ps.executeUpdate();
+            } catch (Exception ignored) {}
+        }
+        return ok;
     }
 
     // Utility: get userId for a claim
@@ -223,6 +239,30 @@ public class ClaimDAO {
             e.printStackTrace();
         }
         return -1;
+    }
+
+    // Mark a claim as returned/resolved
+    public boolean markReturned(int claimId) {
+        String sql = "UPDATE claims SET status='RETURNED' WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, claimId);
+            int rows = ps.executeUpdate();
+            if (rows == 1) {
+                // Also mark related item as RETURNED
+                try (PreparedStatement ps2 = conn.prepareStatement(
+                        "UPDATE items SET status='RETURNED' WHERE id=(SELECT item_id FROM claims WHERE id=?)")) {
+                    ps2.setInt(1, claimId);
+                    ps2.executeUpdate();
+                } catch (Exception ignored) {}
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            System.err.println("Error marking claim returned: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
     }
 
     // Utility: get itemId for a claim
@@ -245,13 +285,13 @@ public class ClaimDAO {
 
     // Utility: get ownerId for an item (the reporter of the item)
     public int getOwnerIdForItem(int itemId) {
-        String sql = "SELECT reported_by FROM items WHERE id = ?";
+        String sql = "SELECT user_id FROM items WHERE id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, itemId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getInt("reported_by");
+                    return rs.getInt("user_id");
                 }
             }
         } catch (Exception e) {

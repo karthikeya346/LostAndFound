@@ -3,10 +3,12 @@ package com.lostfound.dao;
 import model.Item;
 import model.Claim;
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.util.*;
 
+@Component
 public class ItemDAO {
 
     private final AuditLogDAO auditLogDAO = new AuditLogDAO();
@@ -56,9 +58,13 @@ public class ItemDAO {
     // Fetch all items for admin (with usernames)
     public List<Item> getAllItemsForAdmin() {
         List<Item> items = new ArrayList<>();
-        String sql = "SELECT i.id, i.user_id, i.title, i.description, i.location, i.date_reported, " +
-                     "i.type, i.status, i.image_path, u.username " +
-                     "FROM items i JOIN users u ON i.user_id = u.id " +
+        String sql = "SELECT i.id, i.user_id, i.title, i.description, i.location, i.date_reported, i.type, " +
+                     "COALESCE(MAX(CASE WHEN UPPER(c.status)='RETURNED' THEN 'RETURNED' END), i.status) AS status, " +
+                     "i.image_path, u.username " +
+                     "FROM items i " +
+                     "JOIN users u ON i.user_id = u.id " +
+                     "LEFT JOIN claims c ON c.item_id = i.id " +
+                     "GROUP BY i.id, i.user_id, i.title, i.description, i.location, i.date_reported, i.type, i.status, i.image_path, u.username " +
                      "ORDER BY i.date_reported DESC";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -87,11 +93,17 @@ public class ItemDAO {
     }
 
     // Fetch all items for user (no usernames needed)
-    // ✅ Filter out CLAIMED items so users don’t see them
+    // ✅ Show only APPROVED items to users
     public List<Item> getAllItemsForUserView() {
         List<Item> items = new ArrayList<>();
-        String sql = "SELECT id, user_id, title, description, location, date_reported, type, status, image_path " +
-                     "FROM items WHERE status != 'CLAIMED' ORDER BY date_reported DESC";
+        String sql = "SELECT i.id, i.user_id, i.title, i.description, i.location, i.date_reported, i.type, " +
+                     "COALESCE(MAX(CASE WHEN UPPER(c.status)='RETURNED' THEN 'RETURNED' END), i.status) AS status, " +
+                     "i.image_path " +
+                     "FROM items i " +
+                     "LEFT JOIN claims c ON c.item_id = i.id " +
+                     "GROUP BY i.id, i.user_id, i.title, i.description, i.location, i.date_reported, i.type, i.status, i.image_path " +
+                     "HAVING status IN ('APPROVED','RETURNED') " +
+                     "ORDER BY i.date_reported DESC";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -310,5 +322,36 @@ public class ItemDAO {
             e.printStackTrace();
         }
         return false;
+    }
+
+    // Get items by user
+    public List<Item> getItemsByUser(int userId) {
+        String sql = "SELECT i.*, u.username as reported_by FROM items i " +
+                     "LEFT JOIN users u ON i.user_id = u.id " +
+                     "WHERE i.user_id = ? ORDER BY i.date_reported DESC";
+        List<Item> items = new ArrayList<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Item item = new Item(
+                        rs.getInt("id"),
+                        rs.getString("title"),
+                        rs.getString("description"),
+                        rs.getString("location"),
+                        rs.getDate("date_reported"),
+                        rs.getString("type"),
+                        rs.getString("status"),
+                        rs.getString("reported_by"),
+                        rs.getString("image_path")
+                    );
+                    items.add(item);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error getting items by user: " + e.getMessage());
+        }
+        return items;
     }
 }

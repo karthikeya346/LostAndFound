@@ -2,7 +2,9 @@ package com.lostfound.service;
 
 import com.lostfound.dao.NotificationDAO;
 import com.lostfound.util.EmailUtil;
+import org.springframework.stereotype.Service;
 
+@Service
 public class NotificationService {
 
     private final NotificationDAO notificationDAO = new NotificationDAO();

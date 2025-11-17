@@ -4,7 +4,9 @@ import com.lostfound.dao.ItemDAO;
 import com.lostfound.dao.ClaimDAO;
 import com.lostfound.dao.NotificationDAO;
 import com.lostfound.dao.AuditLogDAO;
+import org.springframework.stereotype.Service;
 
+@Service
 public class AdminService {
 
     private final ItemDAO itemDAO;

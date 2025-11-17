@@ -1,8 +1,10 @@
 package com.lostfound.dao;
 
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
 import java.sql.*;
 
+@Component
 public class OTPDAO {
 
     private final AuditLogDAO auditLogDAO = new AuditLogDAO();

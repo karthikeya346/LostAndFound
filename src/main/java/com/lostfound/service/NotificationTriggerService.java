@@ -2,7 +2,9 @@ package com.lostfound.service;
 
 import com.lostfound.dao.NotificationDAO;
 import com.lostfound.dao.AuditLogDAO;
+import org.springframework.stereotype.Service;
 
+@Service
 public class NotificationTriggerService {
 
     private final NotificationDAO notificationDAO = new NotificationDAO();

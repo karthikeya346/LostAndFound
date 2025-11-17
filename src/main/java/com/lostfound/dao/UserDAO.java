@@ -2,11 +2,13 @@ package com.lostfound.dao;
 
 import model.User;
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+@Component
 public class UserDAO {
 
     private final AuditLogDAO auditLogDAO = new AuditLogDAO();
@@ -15,12 +17,12 @@ public class UserDAO {
 
     /** Create a new user (registration). */
     public boolean createUser(User user) {
-        String sql = "INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO users (username, password, role, email) VALUES (?, ?, ?, ?)";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, user.getUsername());
-            ps.setString(2, user.getPasswordHash());
+            ps.setString(2, user.getPassword());
             ps.setString(3, user.getRole());
             ps.setString(4, user.getEmail());
             return ps.executeUpdate() == 1;
@@ -32,9 +34,69 @@ public class UserDAO {
         }
     }
 
+    // ---------------- Login OTP helpers ----------------
+
+    /** Set a short-lived OTP for login on the user row. */
+    public boolean setLoginOtp(int userId, String otp, Timestamp expiry) {
+        String sql = "UPDATE users SET reset_token=?, reset_token_expiry=? WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, otp);
+            ps.setTimestamp(2, expiry);
+            ps.setInt(3, userId);
+            return ps.executeUpdate() == 1;
+        } catch (Exception e) {
+            System.err.println("Error setting login OTP: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** Verify OTP for a user (must match and be unexpired). */
+public boolean verifyLoginOtp(int userId, String otp) {
+    String sql = "SELECT reset_token, reset_token_expiry FROM users WHERE id=?";
+    try (Connection conn = DBConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+
+        ps.setInt(1, userId);
+        try (ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                String dbToken = rs.getString("reset_token");
+                Timestamp expiry = rs.getTimestamp("reset_token_expiry");
+
+                System.out.println("[verifyLoginOtp] DB token: " + dbToken);
+                System.out.println("[verifyLoginOtp] Entered token: " + otp);
+                System.out.println("[verifyLoginOtp] Expiry: " + expiry + ", Now: " + new Timestamp(System.currentTimeMillis()));
+
+                if (dbToken != null && otp != null &&
+                    dbToken.trim().equals(otp.trim()) &&
+                    (expiry == null || expiry.after(new Timestamp(System.currentTimeMillis())))) {
+                    System.out.println("[verifyLoginOtp] ✅ OTP verified successfully");
+                    return true;
+                }
+            }
+        }
+    } catch (Exception e) {
+        System.err.println("Error verifying login OTP: " + e.getMessage());
+    }
+    return false;
+}
+
+    /** Clear OTP after successful verification. */
+    public boolean clearLoginOtp(int userId) {
+        String sql = "UPDATE users SET reset_token=NULL, reset_token_expiry=NULL WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            return ps.executeUpdate() == 1;
+        } catch (Exception e) {
+            System.err.println("Error clearing login OTP: " + e.getMessage());
+            return false;
+        }
+    }
+
     /** Fetch user by username (for login). */
     public User getByUsername(String username) {
-        String sql = "SELECT id, username, password_hash, role, email FROM users WHERE username = ?";
+        String sql = "SELECT id, username, password AS password_hash, role, email, status FROM users WHERE username = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -46,7 +108,8 @@ public class UserDAO {
                         rs.getString("username"),
                         rs.getString("password_hash"),
                         rs.getString("role"),
-                        rs.getString("email")
+                        rs.getString("email"),
+                        rs.getString("status")
                     );
                 }
             }
@@ -60,7 +123,7 @@ public class UserDAO {
 
     /** Fetch user by ID. */
     public User getById(int id) {
-        String sql = "SELECT id, username, password_hash, role, email FROM users WHERE id = ?";
+        String sql = "SELECT id, username, password AS password_hash, role, email, status FROM users WHERE id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -72,7 +135,8 @@ public class UserDAO {
                         rs.getString("username"),
                         rs.getString("password_hash"),
                         rs.getString("role"),
-                        rs.getString("email")
+                        rs.getString("email"),
+                        rs.getString("status")
                     );
                 }
             }
@@ -104,7 +168,7 @@ public class UserDAO {
 
     /** Check if an email already exists. */
     public boolean existsByEmail(String email) {
-        String sql = "SELECT 1 FROM users WHERE email = ?";
+        String sql = "SELECT 1 FROM users WHERE LOWER(email) = LOWER(?)";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -144,7 +208,7 @@ public class UserDAO {
 
     /** Create a password reset token for a user identified by email. */
     public boolean createPasswordResetToken(String email, String token, Timestamp expiry) {
-        String sql = "UPDATE users SET reset_token=?, reset_token_expiry=? WHERE email=?";
+        String sql = "UPDATE users SET reset_token=?, reset_token_expiry=? WHERE LOWER(email)=LOWER(?)";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -180,7 +244,7 @@ public class UserDAO {
 
     /** Update password by token and clear reset fields. */
     public boolean updatePassword(String token, String newPasswordHash) {
-        String sql = "UPDATE users SET password_hash=?, reset_token=NULL, reset_token_expiry=NULL WHERE reset_token=?";
+        String sql = "UPDATE users SET password=?, reset_token=NULL, reset_token_expiry=NULL WHERE reset_token=?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
@@ -222,7 +286,7 @@ public class UserDAO {
     /** Fetch all users (no password hashes exposed). */
     public List<User> getAllUsers() {
         List<User> users = new ArrayList<>();
-        String sql = "SELECT id, username, role, email FROM users ORDER BY id ASC";
+        String sql = "SELECT id, username, role, email, status FROM users ORDER BY id ASC";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -233,7 +297,8 @@ public class UserDAO {
                     rs.getString("username"),
                     null, // do not expose password hash
                     rs.getString("role"),
-                    rs.getString("email")
+                    rs.getString("email"),
+                    rs.getString("status")
                 );
                 users.add(u);
             }

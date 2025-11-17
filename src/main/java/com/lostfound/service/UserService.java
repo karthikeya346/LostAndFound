@@ -3,10 +3,12 @@ package com.lostfound.service;
 import com.lostfound.dao.UserDAO;
 import com.lostfound.dao.AuditLogDAO;
 import model.User;
+import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
 import java.util.UUID;
 
+@Service
 public class UserService {
 
     private final UserDAO userDAO = new UserDAO();
@@ -57,7 +59,13 @@ public class UserService {
             return null;
         }
 
-        if (plainPassword.equals(user.getPasswordHash())) {
+        // Block banned users
+        if (user.getStatus() != null && "DISABLED".equalsIgnoreCase(user.getStatus())) {
+            auditLogDAO.logAction(user.getId(), "LOGIN_BLOCKED", "Banned user attempted login: " + username);
+            return null;
+        }
+
+        if (plainPassword.equals(user.getPassword())) {
             auditLogDAO.logAction(user.getId(), "LOGIN_SUCCESS", "User logged in: " + username);
             return user;
         } else {

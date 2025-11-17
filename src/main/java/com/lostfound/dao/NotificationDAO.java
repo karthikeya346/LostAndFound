@@ -2,6 +2,7 @@ package com.lostfound.dao;
 
 import model.Notification;
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.List;
 /**
  * DAO for handling user notifications.
  */
+@Component
 public class NotificationDAO {
 
     /** Legacy method: stores only userId + message. */
@@ -111,7 +113,7 @@ public class NotificationDAO {
         }
     }
 
-    /** ✅ Delete a notification (user/admin action). */
+    /** Delete a notification (user/admin action). */
     public boolean deleteNotification(int notificationId, int userId) {
         String sql = "DELETE FROM notifications WHERE id=? AND user_id=?";
         try (Connection conn = DBConnection.getConnection();
@@ -126,7 +128,21 @@ public class NotificationDAO {
         }
     }
 
-    /** ✅ Auto-clear expired OTP notifications (older than 5 minutes). */
+    /** Admin-only: delete any notification by id. */
+    public boolean adminDeleteById(int notificationId) {
+        String sql = "DELETE FROM notifications WHERE id=?";
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, notificationId);
+            return ps.executeUpdate() == 1;
+        } catch (Exception e) {
+            System.err.println("Error admin-deleting notification: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /** Auto-clear expired OTP notifications (older than 5 minutes). */
     public int clearExpiredOtps() {
         String sql = "DELETE FROM notifications WHERE type='OTP' AND created_at < NOW() - INTERVAL 5 MINUTE";
         try (Connection conn = DBConnection.getConnection();

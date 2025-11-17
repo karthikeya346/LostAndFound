@@ -1,9 +1,11 @@
 package com.lostfound.dao;
 
 import com.lostfound.util.DBConnection;
+import org.springframework.stereotype.Component;
 import java.sql.*;
 import java.util.*;
 
+@Component
 public class AdminAnalyticsDAO {
 
     // ---------- Basic Counts ----------
@@ -23,6 +25,11 @@ public class AdminAnalyticsDAO {
     public int getClaimCount() { return getCount("SELECT COUNT(*) FROM claims"); }
     public int getChatCount() { return getCount("SELECT COUNT(*) FROM chats"); }
     public int getAuditLogCount() { return getCount("SELECT COUNT(*) FROM audit_logs"); }
+    public int getChatOpenCount() { return getCount("SELECT COUNT(*) FROM chats WHERE UPPER(status) <> 'CLOSED'"); }
+    public int getChatClosedCount() { return getCount("SELECT COUNT(*) FROM chats WHERE UPPER(status) = 'CLOSED'"); }
+    public int getReturnedClaimsCount() { return getCount("SELECT COUNT(*) FROM claims WHERE UPPER(status) = 'RETURNED'"); }
+
+    public int getActiveClaimCount() { return getCount("SELECT COUNT(*) FROM claims WHERE UPPER(status) <> 'RETURNED'"); }
 
     // ---------- Time-based Trends ----------
     public Map<String, Integer> getClaimsPerMonth(int months) {
@@ -63,6 +70,25 @@ public class AdminAnalyticsDAO {
         return map;
     }
 
+    public Map<String, Integer> getItemsPerMonth(int months) {
+        String sql = "SELECT DATE_FORMAT(date_reported, '%Y-%m') AS ym, COUNT(*) " +
+                     "FROM items WHERE date_reported >= DATE_SUB(CURDATE(), INTERVAL ? MONTH) " +
+                     "GROUP BY ym ORDER BY ym ASC";
+        Map<String, Integer> map = new LinkedHashMap<>();
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, months);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    map.put(rs.getString(1), rs.getInt(2));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return map;
+    }
+
     // ---------- Breakdowns ----------
     public Map<String, Integer> getClaimStatusBreakdown() {
         String sql = "SELECT status, COUNT(*) FROM claims GROUP BY status";
@@ -81,6 +107,21 @@ public class AdminAnalyticsDAO {
 
     public Map<String, Integer> getItemStatusBreakdown() {
         String sql = "SELECT status, COUNT(*) FROM items GROUP BY status";
+        Map<String, Integer> map = new LinkedHashMap<>();
+        try (Connection conn = DBConnection.getConnection();
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                map.put(rs.getString(1), rs.getInt(2));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return map;
+    }
+
+    public Map<String, Integer> getItemTypeBreakdown() {
+        String sql = "SELECT UPPER(type) AS t, COUNT(*) FROM items GROUP BY UPPER(type)";
         Map<String, Integer> map = new LinkedHashMap<>();
         try (Connection conn = DBConnection.getConnection();
              Statement st = conn.createStatement();

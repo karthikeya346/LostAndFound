@@ -1,11 +1,13 @@
 package com.lostfound.service;
 
 import model.User;
+import org.springframework.stereotype.Service;
 
 /**
  * AuthService acts as a thin wrapper around UserService.
  * Handles login, registration, and password reset logic for the UI layer.
  */
+@Service
 public class AuthService {
 
     private final UserService userService = new UserService();

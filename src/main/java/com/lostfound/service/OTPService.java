@@ -3,9 +3,11 @@ package com.lostfound.service;
 import com.lostfound.dao.OTPDAO;
 import com.lostfound.dao.NotificationDAO;
 import com.lostfound.dao.AuditLogDAO;
+import org.springframework.stereotype.Service;
 
 import java.util.Random;
 
+@Service
 public class OTPService {
     private final OTPDAO otpDAO = new OTPDAO();
     private final NotificationDAO notificationDAO = new NotificationDAO();

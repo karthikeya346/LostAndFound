@@ -2,15 +2,24 @@ package com.lostfound.controller;
 
 import com.lostfound.service.AdminAnalyticsService;
 import com.lostfound.dao.AnalyticsDAO;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@RestController
+@RequestMapping("/api/admin")
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"})
 public class AdminDashboardController {
 
-    private final AdminAnalyticsService analyticsService = new AdminAnalyticsService();
-    private final AnalyticsDAO analyticsDAO = new AnalyticsDAO();
+    @Autowired
+    private AdminAnalyticsService analyticsService;
+    
+    @Autowired
+    private AnalyticsDAO analyticsDAO;
 
+    @GetMapping("/dashboard")
     public Map<String, Object> getDashboardData() {
         Map<String, Object> response = new HashMap<>();
 

@@ -2,39 +2,128 @@ package com.lostfound.controller;
 
 import com.lostfound.dao.AuditLogDAO;
 import model.AuditLog;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+@RestController
+@RequestMapping("/api/audit")
+@CrossOrigin(origins = {"http://localhost:3000", "http://127.0.0.1:3000"})
 public class AuditLogController {
 
-    private final AuditLogDAO auditLogDAO = new AuditLogDAO();
+    @Autowired
+    private AuditLogDAO auditLogDAO;
 
-    // ---------------- Logging ----------------
-
-    /** Record a new action in the audit log with full context. */
-    public boolean logAction(int userId, String action, Integer itemId, Integer claimId, String details) {
-        return auditLogDAO.logAction(userId, action, itemId, claimId, details);
+    @GetMapping("/logs")
+    public ResponseEntity<Map<String, Object>> getRecentLogs(@RequestParam(defaultValue = "50") int limit) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            List<AuditLog> logs = auditLogDAO.getRecentLogs(limit);
+            response.put("success", true);
+            response.put("logs", logs);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Convenience overload for simple actions without item/claim context. */
-    public boolean logAction(int userId, String action, String details) {
-        return auditLogDAO.logAction(userId, action, details);
+    @GetMapping("/logs/user/{userId}")
+    public ResponseEntity<Map<String, Object>> getLogsByUser(@PathVariable int userId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            List<AuditLog> logs = auditLogDAO.getLogsByUser(userId);
+            response.put("success", true);
+            response.put("logs", logs);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    // ---------------- Fetching ----------------
-
-    /** Fetch recent logs (for admin dashboard). */
-    public List<AuditLog> getRecentLogs(int limit) {
-        return auditLogDAO.getRecentLogs(limit);
+    @GetMapping("/logs/action/{action}")
+    public ResponseEntity<Map<String, Object>> getLogsByAction(@PathVariable String action) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            List<AuditLog> logs = auditLogDAO.getLogsByAction(action);
+            response.put("success", true);
+            response.put("logs", logs);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Fetch logs for a specific user. */
-    public List<AuditLog> getLogsByUser(int userId) {
-        return auditLogDAO.getLogsByUser(userId);
+    @PostMapping("/log")
+    public ResponseEntity<Map<String, Object>> logAction(@RequestBody Map<String, Object> request) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            int userId = (Integer) request.get("userId");
+            String action = (String) request.get("action");
+            Integer itemId = (Integer) request.get("itemId");
+            Integer claimId = (Integer) request.get("claimId");
+            String details = (String) request.get("details");
+
+            boolean success = auditLogDAO.logAction(userId, action, itemId, claimId, details);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "Action logged successfully");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to log action");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
-    /** Fetch logs for a specific action type. */
-    public List<AuditLog> getLogsByAction(String action) {
-        return auditLogDAO.getLogsByAction(action);
+    @DeleteMapping("/logs")
+    public ResponseEntity<Map<String, Object>> clearAllLogs() {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            int deleted = auditLogDAO.clearAll();
+            response.put("success", true);
+            response.put("deleted", deleted);
+            response.put("message", "All audit logs cleared");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @DeleteMapping("/logs/{id}")
+    public ResponseEntity<Map<String, Object>> deleteLogById(@PathVariable int id) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean ok = auditLogDAO.deleteById(id);
+            if (ok) {
+                response.put("success", true);
+                response.put("message", "Audit log deleted");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "Failed to delete audit log");
+                return ResponseEntity.badRequest().body(response);
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 }
