@@ -240,5 +240,6 @@ MIT (or your preferred license)
 - Names in chat show as "User/User 2":
   - Ensure `/users/:id` endpoint returns username/email; otherwise component falls back to aliases.
 
-## Contribution
-- Updated by Karthikeya
+## Contributors
+- Jayanth (Project Owner)
+- Karthikeya (Contributor)
