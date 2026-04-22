@@ -239,7 +239,3 @@ MIT (or your preferred license)
   - Ensure backend returns `createdAt` (or `sent_at`); frontend normalizes various formats.
 - Names in chat show as "User/User 2":
   - Ensure `/users/:id` endpoint returns username/email; otherwise component falls back to aliases.
-
-## Contributors
-- Jayanth (Project Owner)
-- Karthikeya (Contributor)
